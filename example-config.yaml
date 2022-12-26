@@ -1,0 +1,78 @@
+transactions_file: transactions.csv
+
+db_file: ':memory:'
+
+# Put your category hierarchy here
+# The leaf categories should correspond to ones which have data in Mint, otherwise you'll get an incomplete rollup of
+# your spending data (you can also take advantage of this to exclude categories).
+# Ensure that all category names are unique, as Sankeymatic identifies nodes by only name.
+# This is a simple example of what at category hierarchy might look like.
+# Check the README for an example of how you might create your own.
+categories:
+  Food:
+    Alcohol & Bars:
+    Coffee Shops:
+    Fast Food:
+    Fine Dining:
+    Food Delivery:
+    Groceries:
+    Wine:
+    Food & Dining:
+    Restaurants:
+
+  Health:
+    Dentist:
+    Doctor:
+    Gym:
+    Pharmacy:
+    Hair:
+
+  Bills:
+    Car:
+      Auto & Transport:
+      Auto Insurance:
+      Gas & Fuel:
+      Parking:
+      Service & Parts:
+    Home:
+      Home Insurance:
+      Mortgage & Rent:
+      Property Tax:
+      Home Improvement:
+    Subscriptions:
+      Streaming:
+      Service Fee:
+    All Utilities:
+      Internet:
+      Mobile Phone:
+      Utilities:
+
+  All Travel:
+    Hotel:
+    Ride Share:
+    Vacation:
+    Air Travel:
+    Travel:
+
+  All Shopping:
+    Books:
+    Clothing:
+    Electronics & Software:
+    Entertainment:
+    Movies & DVDs:
+    Shopping:
+    Sporting Goods:
+
+# Put any categories you'd like to exclude from the spending rollup here
+exclude_categories:
+  - Credit Card Payment
+  - Transfer
+
+# Exclude accounts from the rollup here. You'll probably want to put any investment/retirement accounts here.
+# This should be a list of strings
+exclude_accounts: []
+
+# Exclude transactions with a specific label here
+# Note that this will not work for anything
+exclude_labels:
+  - Reimbursable
