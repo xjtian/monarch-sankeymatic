@@ -30,7 +30,7 @@ Configure the Script
 Grab a list of all your transaction categories first:
 
 ```
-$ python main.py --mode=raw
+$ python main.py --mode=flat
 
 Shopping: 100
 Mortgage & Rent: 1000
@@ -43,6 +43,8 @@ This is also a good time to set `exclude_categories`, `exclude_accounts`, and `e
 
 Run
 ---
+
+If you don't want net income in the final visualization, set the `--onlySpend` CLI flag.
 
 ```
 $ python main.py

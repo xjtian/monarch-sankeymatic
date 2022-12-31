@@ -2,11 +2,15 @@ transactions_file: transactions.csv
 
 db_file: ':memory:'
 
+# Any categories with less than this dollar amount in spend will roll into a 'Misc. {Parent Category} Spending'
+# node in the Sankey diagram
+min_category_amount: 500
+
 # Put your category hierarchy here
 # The leaf categories should correspond to ones which have data in Mint, otherwise you'll get an incomplete rollup of
 # your spending data (you can also take advantage of this to exclude categories).
 # Ensure that all category names are unique, as Sankeymatic identifies nodes by only name.
-# This is a simple example of what at category hierarchy might look like.
+# This is a simple example of what a category hierarchy might look like.
 # Check the README for an example of how you might create your own.
 categories:
   Food:
@@ -63,6 +67,26 @@ categories:
     Shopping:
     Sporting Goods:
 
+# These will be used if you want the final graph to include net income.
+# Set the --onlySpend CLI flag if you don't want to analyze income, in which case you can set this to an empty list.
+net_income_categories:
+  - Income
+  - Paycheck
+  - Bonus
+  - Interest Income
+  - Rental Income
+
+# Anything in these categories will flow out of 'Net Income' to a 'Savings' node separate from 'Spending'.
+# This is probably best used in conjunction with `category_offsets` to create synthetic categories, unless you're
+# diligent about splitting/marking transfers in Mint.
+# Categories here should NOT be in your spending category hierarchy.
+saving_categories: []
+
+# Anything in these categories will flow out of 'Net Income' to a 'Taxes' node separate from 'Spending'.
+# This might be useful if you pay quarterly estimated taxes from your post-tax income.
+# Categories here should NOT be in your spending category hierarchy.
+tax_categories: []
+
 # Put any categories you'd like to exclude from the spending rollup here
 exclude_categories:
   - Credit Card Payment
@@ -76,3 +100,12 @@ exclude_accounts: []
 # Note that this will not work for anything
 exclude_labels:
   - Reimbursable
+
+# Use this to manually adjust spending figures for categories
+# For example, maybe you want to exclude an expense for the prior year that landed in the year being analyzed, or you
+# can you this to create a synthetic category to manually group excluded transactions (e.g. turning transfers into a
+# "Savings" category).
+# If you create a synthetic category here, make sure to include it in one of `categories`, `net_income_categories`, or
+# `saving_categories` or else it won't show up in the final graph.
+# Expected type is a mapping str:int
+category_offsets: {}
