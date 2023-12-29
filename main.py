@@ -2,6 +2,7 @@ import argparse
 import csv
 import sqlite3
 from typing import NamedTuple, List, Dict, Any, Tuple
+
 import yaml
 
 
@@ -27,26 +28,27 @@ def main():
     conn.commit()
 
     conf_exclude = (config.exclude_categories, config.exclude_accounts, config.exclude_labels)
-    spending_by_category = select_sums(cur, 'debit', *conf_exclude)
-    credit_by_category = select_sums(cur, 'credit', *conf_exclude)
-    net_spend = calculate_net_spend(spending_by_category, credit_by_category, config.category_offsets)
+    net_spend_by_category = select_sums(cur, config.category_offsets, *conf_exclude)
 
     if args.mode == 'flat':
-        for cat, v in net_spend.items():
+        for cat, v in net_spend_by_category.items():
             print(f'{cat}: {v}')
         return
 
-    spend_diagram, total_spend = sankey_spending(net_spend, config.categories, config.min_category_amount)
+    spend_diagram, total_spend = sankey_spending(net_spend_by_category, config.categories, config.min_category_amount)
     if not args.onlySpend:
-        net_income_by_cat = {k: int(v) for k, v in credit_by_category.items() if k in config.net_income_categories}
-        net_income = sum(net_income_by_cat.values())
+        net_income_by_cat = {k: int(v) for k, v in net_spend_by_category.items() if k in config.net_income_categories}
+        net_income = -sum(net_income_by_cat.values())
         for k, v in net_income_by_cat.items():
-            spend_diagram += f'{k} [{v}] Net Income\n'
+            spend_diagram += f'{k} [{-v}] Net Income\n'
         spend_diagram += f'Net Income [{total_spend}] Spending\n'
 
-        savings_nodes, saving_val = rollup_subcat(net_spend, 'Net Income', 'Savings', config.saving_categories)
-        tax_nodes, tax_val = rollup_subcat(net_spend, 'Net Income', 'Taxes', config.tax_categories)
-        spend_diagram += f'{savings_nodes}\n{tax_nodes}'
+        savings_nodes, saving_val = rollup_subcat(net_spend_by_category, 'Net Income', 'Savings', config.saving_categories)
+        tax_nodes, tax_val = rollup_subcat(net_spend_by_category, 'Net Income', 'Taxes', config.tax_categories)
+        if len(savings_nodes) > 0:
+            spend_diagram += f'{savings_nodes}\n'
+        if len(tax_nodes) > 0:
+            spend_diagram += f'{tax_nodes}\n'
 
         income_diff = net_income - total_spend - saving_val - tax_val
         if income_diff != 0:
@@ -63,20 +65,20 @@ def main():
 
 class Transaction(NamedTuple):
     date: str
-    description: str
-    original_description: str
-    amount: float
-    type: str
+    merchant: str
     category: str
     account: str
+    original_statement: str
+    notes: str
+    amount: float
     # Because I'm being lazy and packing CSV labels into 1 field, excluding labels doesn't work if there are multiple
     # on a single transaction
-    labels: str
+    tags: str
 
     def __conform__(self, protocol):
         if protocol is sqlite3.PrepareProtocol:
-            return self.date, self.description, self.original_description, self.amount, self.type, self.category, \
-                   self.account, self.labels
+            return self.date,  self.merchant, self.category, self.account, self.original_statement, self.notes, \
+                self.amount, self.tags
 
 
 class Config(NamedTuple):
@@ -123,27 +125,27 @@ def load_transactions(tx_filename: str, cur: sqlite3.Cursor):
         reader = csv.DictReader(f)
         for row in reader:
             tx = Transaction(
-                date=row['Date'].replace('/', '-'),
-                description=row['Description'],
-                original_description=row['Original Description'],
-                amount=float(row['Amount']),
-                type=row['Transaction Type'],
+                date=row['Date'],
+                merchant=row['Merchant'],
                 category=row['Category'],
-                account=row['Account Name'],
-                labels=row['Labels'],
+                account=row['Account'],
+                original_statement=row['Original Statement'],
+                notes=row['Notes'],
+                amount=float(row['Amount']),
+                tags=row['Tags'],
             )
             txs.append(tx)
 
     cur.execute(f'''
         CREATE TABLE IF NOT EXISTS transactions(
             date TEXT,
-            description TEXT,
-            original_description TEXT,
-            amount REAL,
-            type TEXT,
+            merchant TEXT,
             category TEXT,
             account TEXT,
-            labels TEXT
+            original_statement TEXT,
+            notes TEXT,
+            amount REAL,
+            tags TEXT
         )
     ''')
     cur.execute('''DELETE FROM transactions WHERE TRUE''')
@@ -152,46 +154,33 @@ def load_transactions(tx_filename: str, cur: sqlite3.Cursor):
 
 def select_sums(
         cur: sqlite3.Cursor,
-        tx_type: str,
+        category_offsets: Dict[str, int],
         exclude_categories: List[str],
         exclude_accounts: List[str],
-        exclude_labels: List[str],
-) -> Dict[str, float]:
+        exclude_tags: List[str],
+) -> Dict[str, int]:
     category_placeholder = _get_palceholder_vals(len(exclude_categories))
     account_placeholder = _get_palceholder_vals(len(exclude_accounts))
-    labels_placeholder = _get_palceholder_vals(len(exclude_labels))
+    tags_placeholder = _get_palceholder_vals(len(exclude_tags))
 
     res = cur.execute(f'''
         SELECT category, SUM(amount) FROM transactions
         WHERE
-            type=? AND
             category NOT IN {category_placeholder} AND
             account NOT IN {account_placeholder} AND
-            labels NOT IN {labels_placeholder}
+            tags NOT IN {tags_placeholder}
         GROUP BY category
         ORDER BY category
-    ''', (tx_type, *exclude_categories, *exclude_accounts, *exclude_labels))
+    ''', (*exclude_categories, *exclude_accounts, *exclude_tags))
 
     ret = {}
     for row in res:
-        ret[row[0]] = float(row[1])
+        ret[row[0]] = -int(float(row[1]))
+    for k, v in category_offsets.items():
+        if k not in ret:
+            ret[k] = 0
+        ret[k] += v
     return ret
-
-
-def calculate_net_spend(spending_by_cat: Dict[str, float], credit_by_cat: Dict[str, float], offsets: Dict[str, int]) -> Dict[str, int]:
-    net_spend = {}
-    for k, v in spending_by_cat.items():
-        net = v - credit_by_cat.get(k, 0)
-        net_spend[k] = int(net)
-    for k, v in credit_by_cat.items():
-        if k not in net_spend:
-            net_spend[k] = -int(v)
-
-    for k, v in offsets.items():
-        if k not in net_spend:
-            net_spend[k] = 0
-        net_spend[k] += v
-    return net_spend
 
 
 def sankey_spending(net_spend: Dict[str, int], category_hierarchy: Dict[str, Any], category_limit: int) -> Tuple[str, int]:

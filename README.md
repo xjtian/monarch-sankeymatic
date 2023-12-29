@@ -1,7 +1,8 @@
-Mint-Sankey
+Monarch-Sankey
 ===
 
-Turn your Mint transaction data into a Sankeymatic diagram with a customizable node hierarchy.
+Turn your Monarch transaction data into a Sankeymatic diagram with a customizable node hierarchy. This tool is meant to
+offer more flexibility in defining category hierarchies than the built-in cash flow visualizer in Monarch
 
 Install
 ---
@@ -19,6 +20,7 @@ Export Your Data
 - Apply a date filter to the Mint transactions view to the time period you want to analyze
 - Hit "Export xxx Transactions", which will download a `transactions.csv` file
 - Drag that file into this directory, or just keep a note of where it is
+- TODO: Manually prune Monarch transactions file of old transactions
 
 Configure the Script
 ---
